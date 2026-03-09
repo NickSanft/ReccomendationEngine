@@ -68,6 +68,7 @@ dependencies {
     testImplementation(libs.ktor.client.cio)
     testImplementation(libs.junit5.api)
     testRuntimeOnly(libs.junit5.engine)
+    testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.mockk)
     testImplementation(libs.testcontainers.core)
     testImplementation(libs.testcontainers.kafka)
