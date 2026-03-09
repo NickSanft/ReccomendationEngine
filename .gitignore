@@ -1,4 +1,21 @@
+# IDE
 .idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Gradle
+.gradle/
+build/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
 # Compiled class file
 *.class
 
