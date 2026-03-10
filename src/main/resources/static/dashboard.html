@@ -234,6 +234,9 @@
     if (!paused) setStatus('closed', 'reconnecting…');
   };
 
+  // Keep-alive pings from the server — ignore, onopen already handled status
+  source.addEventListener('ping', () => {});
+
   // Generic fallback (shouldn't fire when named events are sent)
   source.onmessage = (e) => handleEvent('Event', e.data);
 
