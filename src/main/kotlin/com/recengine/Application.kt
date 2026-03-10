@@ -6,9 +6,13 @@ import com.recengine.dashboard.dashboardRoutes
 import com.recengine.kafka.KafkaConsumerService
 import com.recengine.kafka.KafkaProducerService
 import com.recengine.kafka.TopicAdmin
+import com.recengine.routing.AbAssigner
 import com.recengine.routing.devRoutes
+import com.recengine.routing.feedbackRoutes
+import com.recengine.routing.recommendationRoutes
 import com.recengine.ml.FeatureVectorBuilder
 import com.recengine.ml.OnlineFM
+import com.recengine.ml.ScoringEngine
 import com.recengine.pipeline.EventProcessor
 import com.recengine.pipeline.SessionDecayJob
 import com.recengine.redis.FeatureStore
@@ -78,7 +82,8 @@ fun Application.module() {
         }
     }
 
-    // ── Dev seed endpoint ───────────────────────────────────────────
+    // ── Feedback + Dev endpoints (Kafka only, no Redis required) ───
+    feedbackRoutes(producer)
     devRoutes(producer)
 
     // ── Dashboard (SSE event feed) ──────────────────────────────────
@@ -104,6 +109,8 @@ fun Application.module() {
         val fm              = OnlineFM(config.model.fm)
         val featureBuilder  = FeatureVectorBuilder(config.model.fm.numFeatures)
 
+        val abAssigner = AbAssigner(redis, config.ab)
+
         processor = EventProcessor(
             consumer          = KafkaConsumerService(config.kafka, json),
             sessionStore      = sessionStore,
@@ -117,6 +124,15 @@ fun Application.module() {
 
         processor.start()
         decayJob.start()
+
+        // ── Recommendation API + Admin ──────────────────────────────
+        recommendationRoutes(
+            scoringEngine  = ScoringEngine(fm, sessionStore, featureStore, config.model.scoring),
+            featureStore   = featureStore,
+            abAssigner     = abAssigner,
+            featureBuilder = featureBuilder,
+            fm             = fm,
+        )
 
         routing {
             get("/health/redis") {

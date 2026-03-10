@@ -45,3 +45,6 @@ data class ModelMetrics(
     val averageLoss: Double,
     val variantDistribution: Map<String, Int>
 )
+
+@Serializable
+data class TrendingResponse(val items: List<String>, val window: String)

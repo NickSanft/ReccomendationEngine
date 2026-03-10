@@ -34,9 +34,12 @@ class OnlineFM(private val cfg: FmConfig) {
     }
 
     val totalUpdates: AtomicLong = AtomicLong(0)
+    val lastUpdateMs: AtomicLong = AtomicLong(0)
 
     var runningLoss: Double = 0.0
         private set
+
+    fun averageLoss(): Double = runningLoss
 
     private fun sigmoid(x: Double) = 1.0 / (1.0 + exp(-x))
 
@@ -109,6 +112,7 @@ class OnlineFM(private val cfg: FmConfig) {
             }
         }
         totalUpdates.incrementAndGet()
+        lastUpdateMs.set(System.currentTimeMillis())
     }
 
     /** Export all non-zero weights as a flat string map (for Redis persistence). */
