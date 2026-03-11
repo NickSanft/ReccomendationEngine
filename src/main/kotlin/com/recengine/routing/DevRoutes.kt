@@ -3,9 +3,11 @@ package com.recengine.routing
 import com.recengine.kafka.KafkaProducerService
 import com.recengine.model.ClickEvent
 import com.recengine.model.ImpressionEvent
+import com.recengine.model.ItemFeatures
 import com.recengine.model.PurchaseEvent
 import com.recengine.model.RecEngineEvent
 import com.recengine.model.ViewEvent
+import com.recengine.redis.FeatureStore
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -25,8 +27,33 @@ data class SeedResult(
     val types: Map<String, Int>
 )
 
-fun Application.devRoutes(producer: KafkaProducerService) {
+fun Application.devRoutes(producer: KafkaProducerService, featureStore: FeatureStore? = null) {
     routing {
+
+        /**
+         * POST /dev/seed/items
+         *
+         * Seeds all 50 catalogue items into Redis:
+         * - ItemFeatures stored at item:{id}:features
+         * - Initial popularity scores in popularity:hourly so getPopularItems() returns results immediately
+         */
+        post("/dev/seed/items") {
+            val store = featureStore
+            if (store == null) {
+                call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "Redis unavailable"))
+                return@post
+            }
+            val now = System.currentTimeMillis()
+            seedItemCatalogue.forEach { item ->
+                store.setItemFeatures(item.copy(publishedAtMs = now - Random.nextLong(0, 30L * 86_400_000)))
+                // Seed random initial popularity so items appear in trending immediately
+                store.incrementPopularity(item.itemId, "hourly", Random.nextDouble(10.0, 200.0))
+                store.incrementPopularity(item.itemId, "daily",  Random.nextDouble(50.0, 500.0))
+            }
+            log.info { "Seeded ${seedItemCatalogue.size} items into Redis" }
+            call.respond(mapOf("seeded" to seedItemCatalogue.size))
+        }
+
         /**
          * POST /dev/seed?count=20&type=random
          *
@@ -128,3 +155,72 @@ private fun impression(userId: String, sessionId: String, now: Long) =
         sessionId   = sessionId,
         variantId   = variants.random()
     )
+
+// ── Static item catalogue (mirrors shop.html JS catalogue) ───────────────────
+
+private fun item(id: String, cat: String, vararg tags: String) = ItemFeatures(
+    itemId       = id,
+    categoryIds  = listOf(cat),
+    tags         = tags.toList(),
+    publishedAtMs = 0L,  // overwritten in the seed endpoint with a random offset
+    popularity   = 0.0,
+)
+
+private val seedItemCatalogue: List<ItemFeatures> = listOf(
+    // Electronics
+    item("item-001","electronics","sale","trending"),
+    item("item-002","electronics","popular"),
+    item("item-003","electronics","sale"),
+    item("item-004","electronics"),
+    item("item-005","electronics","popular"),
+    item("item-006","electronics","trending"),
+    item("item-007","electronics","trending"),
+    item("item-008","electronics","sale"),
+    item("item-009","electronics"),
+    item("item-010","electronics","popular"),
+    // Books
+    item("item-011","books","trending"),
+    item("item-012","books","popular"),
+    item("item-013","books"),
+    item("item-014","books","trending"),
+    item("item-015","books","sale"),
+    item("item-016","books","trending","sale"),
+    item("item-017","books","popular"),
+    item("item-018","books"),
+    item("item-019","books"),
+    item("item-020","books","trending"),
+    // Sports
+    item("item-021","sports","trending"),
+    item("item-022","sports","popular"),
+    item("item-023","sports","sale"),
+    item("item-024","sports"),
+    item("item-025","sports","sale"),
+    item("item-026","sports"),
+    item("item-027","sports","popular"),
+    item("item-028","sports"),
+    item("item-029","sports","trending"),
+    item("item-030","sports","sale"),
+    // Home
+    item("item-031","home","popular"),
+    item("item-032","home","trending"),
+    item("item-033","home","sale"),
+    item("item-034","home"),
+    item("item-035","home"),
+    item("item-036","home","trending","sale"),
+    item("item-037","home"),
+    item("item-038","home","popular"),
+    item("item-039","home"),
+    item("item-040","home","trending"),
+    // Clothing
+    item("item-041","clothing","sale"),
+    item("item-042","clothing","popular"),
+    item("item-043","clothing"),
+    item("item-044","clothing","sale"),
+    item("item-045","clothing","trending"),
+    // Toys
+    item("item-046","toys","popular"),
+    item("item-047","toys"),
+    item("item-048","toys","trending"),
+    item("item-049","toys"),
+    item("item-050","toys","sale","popular"),
+)

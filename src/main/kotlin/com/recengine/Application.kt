@@ -96,9 +96,9 @@ fun Application.module() {
         }
     }
 
-    // ── Feedback + Dev endpoints (Kafka only, no Redis required) ───
+    // ── Feedback + Dev endpoints (Kafka only; Redis injected later if available) ─
     feedbackRoutes(producer)
-    devRoutes(producer)
+    var capturedFeatureStore: FeatureStore? = null
 
     // ── Dashboard (SSE event feed) ──────────────────────────────────
     // Uses its own "-dashboard" consumer group so it gets all events
@@ -123,6 +123,7 @@ fun Application.module() {
 
         val sessionStore    = SessionStore(redis, config.redis)
         val featureStore    = FeatureStore(redis, json)
+        capturedFeatureStore = featureStore
         val fm              = OnlineFM(config.model.fm)
         capturedFm          = fm
         val featureBuilder  = FeatureVectorBuilder(config.model.fm.numFeatures)
@@ -162,6 +163,9 @@ fun Application.module() {
     } catch (e: Exception) {
         logger.warn(e) { "Redis unavailable — EventProcessor and SessionDecayJob not started" }
     }
+
+    // ── Dev seed endpoints (Kafka + optional Redis for item seeding) ─
+    devRoutes(producer, capturedFeatureStore)
 
     // ── Stats API ───────────────────────────────────────────────────
     statsRoutes(
