@@ -8,6 +8,7 @@ kafka               = "3.7.0"
 koin                = "3.5.6"
 micrometer          = "1.12.5"
 logback             = "1.5.3"
+janino              = "3.1.12"
 kotlin-logging      = "6.0.9"
 typesafe-config     = "1.4.3"
 junit5              = "5.10.2"
@@ -41,6 +42,7 @@ koin-logger             = { module = "io.insert-koin:koin-logger-slf4j",        
 
 micrometer-prometheus   = { module = "io.micrometer:micrometer-registry-prometheus",     version.ref = "micrometer" }
 logback-classic         = { module = "ch.qos.logback:logback-classic",                   version.ref = "logback" }
+janino                  = { module = "org.codehaus.janino:janino",                        version.ref = "janino" }
 kotlin-logging          = { module = "io.github.oshai:kotlin-logging-jvm",               version.ref = "kotlin-logging" }
 typesafe-config         = { module = "com.typesafe:config",                              version.ref = "typesafe-config" }
 

@@ -62,6 +62,7 @@ dependencies {
     // Metrics + Logging + Config
     implementation(libs.micrometer.prometheus)
     implementation(libs.logback.classic)
+    implementation(libs.janino)
     implementation(libs.kotlin.logging)
     implementation(libs.typesafe.config)
 
