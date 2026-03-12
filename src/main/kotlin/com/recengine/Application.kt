@@ -116,6 +116,7 @@ fun Application.module() {
     var processor: EventProcessor?                               = null
     var decayJob: SessionDecayJob?                               = null
     var capturedFm: OnlineFM?                                    = null
+    var capturedAbAssigner: AbAssigner?                          = null
     var capturedRedis: io.lettuce.core.api.coroutines.RedisCoroutinesCommands<String, String>? = null
 
     try {
@@ -131,6 +132,7 @@ fun Application.module() {
         val featureBuilder  = FeatureVectorBuilder(config.model.fm.numFeatures)
 
         val abAssigner = AbAssigner(redis, config.ab)
+        capturedAbAssigner = abAssigner
 
         processor = EventProcessor(
             consumer          = KafkaConsumerService(config.kafka, json),
@@ -171,10 +173,11 @@ fun Application.module() {
 
     // ── Stats API ───────────────────────────────────────────────────
     statsRoutes(
-        fm               = capturedFm,
+        fm                 = capturedFm,
         isProcessorRunning = processor != null,
-        startTimeMs      = startTimeMs,
-        redis            = capturedRedis,
+        startTimeMs        = startTimeMs,
+        redis              = capturedRedis,
+        abAssigner         = capturedAbAssigner,
     )
 
     // ── Graceful shutdown ───────────────────────────────────────────

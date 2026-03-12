@@ -39,6 +39,9 @@ data class RecommendationResponse(
 )
 
 @Serializable
+data class LossPoint(val timestampMs: Long, val loss: Double)
+
+@Serializable
 data class ModelMetrics(
     val totalUpdates: Long,
     val lastUpdateMs: Long,
@@ -58,7 +61,9 @@ data class PipelineStats(
     val recLatencyP50Ms:  Double,
     val recLatencyP95Ms:  Double,
     val recLatencyP99Ms:  Double,
-    val processorRunning: Boolean,
-    val uptimeMs:         Long,
-    val redisApproxKeys:  Long,
+    val processorRunning:    Boolean,
+    val uptimeMs:            Long,
+    val redisApproxKeys:     Long,
+    val fmLossHistory:       List<LossPoint> = emptyList(),
+    val variantServeCounts:  Map<String, Long> = emptyMap(),
 )

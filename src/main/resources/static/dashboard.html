@@ -277,6 +277,26 @@
     .chart-wrap { position: relative; height: 160px; }
     .chart-wrap-tall { position: relative; height: 220px; }
 
+    /* ── Score inspector ──────────────────────────────────────────── */
+    .inspector-form { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+    .inspector-input {
+      flex: 1; background: #1e2235; border: 1px solid #2d3748; color: #e2e8f0;
+      padding: 7px 12px; border-radius: 6px; font-size: 0.85rem;
+    }
+    .inspector-input::placeholder { color: #4a5568; }
+    .inspector-btn {
+      background: #3b0764; border: 1px solid #7c3aed; color: #d8b4fe;
+      padding: 7px 16px; border-radius: 6px; font-size: 0.85rem;
+      cursor: pointer; font-weight: 500; transition: background 0.15s; white-space: nowrap;
+    }
+    .inspector-btn:hover:not(:disabled) { background: #4c0aad; }
+    .inspector-btn:disabled { opacity: 0.5; cursor: default; }
+    .inspector-legend {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #94a3b8; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
     .latency-row { display: flex; gap: 16px; }
     .latency-card {
       flex: 1; background: #1a1d2e; border: 1px solid #2d3748;
@@ -568,6 +588,26 @@
       <div class="chart-wrap"><canvas id="chart-latency"></canvas></div>
     </div>
 
+    <div class="chart-card">
+      <div class="chart-card-title">Variant serving distribution (requests since server start)</div>
+      <div class="chart-wrap"><canvas id="chart-variants"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">Score component inspector</div>
+      <div class="inspector-form">
+        <input id="inspector-user" class="inspector-input" type="text" placeholder="Enter userId (e.g. user-1)">
+        <button id="inspector-btn" class="inspector-btn" onclick="inspectScores()">Inspect</button>
+      </div>
+      <div class="inspector-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Session</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a855f7"></div>Content (FM)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Popularity</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Recency</div>
+      </div>
+      <div class="chart-wrap-tall"><canvas id="chart-scores"></canvas></div>
+    </div>
+
   </div>
 </div>
 
@@ -727,6 +767,81 @@ const chartThroughput = mkSparkline('chart-throughput', 'events/s', '#a78bfa');
 const chartLoss       = mkSparkline('chart-loss',       'loss',     '#f59e0b');
 const chartLatency    = mkSparkline('chart-latency',    'p99 ms',   '#38bdf8');
 
+// ── Variant distribution bar chart ────────────────────────────────
+const variantChart = (() => {
+  const ctx = document.getElementById('chart-variants').getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: ['#6366f1','#a855f7','#10b981','#f59e0b'], borderRadius: 4 }] },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        y: { beginAtZero: true, grid: { color: '#1e2235' }, ticks: { font: { size: 11 }, maxTicksLimit: 4 } }
+      }
+    }
+  });
+})();
+
+// ── Score component stacked bar chart ─────────────────────────────
+const scoreChart = (() => {
+  const ctx = document.getElementById('chart-scores').getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Session',    data: [], backgroundColor: '#6366f1', borderRadius: 0 },
+        { label: 'Content',    data: [], backgroundColor: '#a855f7', borderRadius: 0 },
+        { label: 'Popularity', data: [], backgroundColor: '#10b981', borderRadius: 0 },
+        { label: 'Recency',    data: [], backgroundColor: '#f59e0b', borderRadius: 0 },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      animation: false, responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${(ctx.raw * 100).toFixed(1)}%`
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, max: 1, grid: { color: '#1e2235' },
+             ticks: { font: { size: 11 }, callback: v => (v * 100).toFixed(0) + '%' } },
+        y: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+})();
+
+let lossHistorySeeded = false;
+
+async function inspectScores() {
+  const userId = document.getElementById('inspector-user').value.trim();
+  if (!userId) return;
+  const btn = document.getElementById('inspector-btn');
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const r = await fetch(`/api/v1/recommendations/${encodeURIComponent(userId)}?limit=10`);
+    if (!r.ok) { showToast('No recommendations returned — is Redis running?', 'error'); return; }
+    const data = await r.json();
+    const items = data.items || [];
+    scoreChart.data.labels = items.map(i => i.itemId);
+    const wSession = 0.40, wContent = 0.35, wPop = 0.15, wRecency = 0.10;
+    scoreChart.data.datasets[0].data = items.map(i => (i.components.sessionScore    * wSession)  / i.score);
+    scoreChart.data.datasets[1].data = items.map(i => (i.components.contentScore    * wContent)  / i.score);
+    scoreChart.data.datasets[2].data = items.map(i => (i.components.popularityScore * wPop)      / i.score);
+    scoreChart.data.datasets[3].data = items.map(i => (i.components.recencyScore    * wRecency)  / i.score);
+    scoreChart.update('none');
+    if (items.length === 0) showToast('User has no candidates — try seeding items first', 'error');
+  } catch(e) { showToast('Inspect failed: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Inspect'; }
+}
+
 // Event type bar chart
 const typeColors = {
   ViewEvent:       '#6366f1',
@@ -790,8 +905,26 @@ async function pollStats() {
   document.getElementById('m-lastupdate').textContent = data.fmLastUpdateMs > 0
     ? new Date(data.fmLastUpdateMs).toLocaleTimeString() : 'never';
 
-  pushSparkline(chartLoss, parseFloat(data.fmRunningLoss.toFixed(4)));
+  // Seed loss chart from full server-side history on first load
+  if (!lossHistorySeeded && data.fmLossHistory && data.fmLossHistory.length > 0) {
+    data.fmLossHistory.forEach(pt => {
+      chartLoss.data.labels.push(new Date(pt.timestampMs).toLocaleTimeString());
+      chartLoss.data.datasets[0].data.push(parseFloat(pt.loss.toFixed(4)));
+    });
+    chartLoss.update('none');
+    lossHistorySeeded = true;
+  } else {
+    pushSparkline(chartLoss, parseFloat(data.fmRunningLoss.toFixed(4)));
+  }
   pushSparkline(chartLatency, parseFloat(data.recLatencyP99Ms.toFixed(2)));
+
+  // Variant distribution
+  if (data.variantServeCounts && Object.keys(data.variantServeCounts).length > 0) {
+    const variants = Object.keys(data.variantServeCounts);
+    variantChart.data.labels = variants;
+    variantChart.data.datasets[0].data = variants.map(v => data.variantServeCounts[v]);
+    variantChart.update('none');
+  }
 
   setLatencyCard('lat-p50', data.recLatencyP50Ms);
   setLatencyCard('lat-p95', data.recLatencyP95Ms);

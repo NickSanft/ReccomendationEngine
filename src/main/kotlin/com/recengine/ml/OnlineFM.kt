@@ -39,7 +39,12 @@ class OnlineFM(private val cfg: FmConfig) {
     var runningLoss: Double = 0.0
         private set
 
+    private val lossHistory = ArrayDeque<Pair<Long, Double>>()
+
     fun averageLoss(): Double = runningLoss
+
+    /** Returns up to 300 (timestampMs, loss) snapshots taken during learn(). */
+    fun getLossHistory(): List<Pair<Long, Double>> = synchronized(lossHistory) { lossHistory.toList() }
 
     private fun sigmoid(x: Double) = 1.0 / (1.0 + exp(-x))
 
@@ -75,6 +80,10 @@ class OnlineFM(private val cfg: FmConfig) {
         val pred = sigmoid(predict(fv))
         val loss = pred - label
         runningLoss = 0.99 * runningLoss + 0.01 * kotlin.math.abs(pred - label)
+        synchronized(lossHistory) {
+            if (lossHistory.size >= 300) lossHistory.removeFirst()
+            lossHistory.addLast(System.currentTimeMillis() to runningLoss)
+        }
 
         val lr  = cfg.learningRate
         val reg = cfg.regularization
